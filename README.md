@@ -11,7 +11,7 @@
 
 ## 🛠 Технологии
 
-- **Backend**: Python, Scikit-learn, CatBoost, XGBoost
+- **Backend**: Python, Scikit-learn, CatBoost
 - **UI**: Tkinter, CustomTKinter
 - **ML**: Линейные модели, ансамбли, градиентный бустинг
 - **Data**: Pandas, NumPy, Pickle
