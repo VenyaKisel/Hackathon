@@ -18,28 +18,51 @@ class DietPredictionView:
     def __init__(self, parent, app, main_window):
         self.app = app
         self.main_window = main_window
+        
+        self.current_diets = [] 
+        self.current_diet = None 
+        
         self.predictor = AcidPredictor()
-        self.recommender = DietRecommender()        
+        self.recommender = DietRecommender(self.predictor)
+        
         self.frame = ttk.Frame(parent, padding="10")
         self.editor_visible = True 
-        self.current_diets: List[Diet] = []  # Добавляем хранение загруженных рационов
         self.create_widgets()
         
+        self._test_model_loading()
+
+    def _test_model_loading(self):
+        """Тестирует загрузку моделей и выводит статус"""
+        if hasattr(self.predictor, 'acid_models') and self.predictor.acid_models:
+            print("✅ Линейные модели успешно загружены")
+            print(f"📊 Загружено моделей для кислот: {len(self.predictor.acid_models)}")
+            print(f"📊 Ожидаемые компоненты: {len(self.predictor.expected_components)}")
+            
+            print("Загруженные модели для кислот:")
+            for i, acid_name in enumerate(self.predictor.acid_models.keys()):
+                print(f"  {i+1}. {acid_name}")
+
+            print("Первые 10 компонентов модели:")
+            for i, comp in enumerate(self.predictor.expected_components[:10]):
+                print(f"  {i+1}. {comp}")
+        else:
+            print("❌ Линейные модели не загружены - используются fallback предсказания")
+            if hasattr(self.predictor, 'acid_models'):
+                print(f"   Доступно моделей: {len(self.predictor.acid_models)}")
+
     def create_widgets(self):
         """Создание интерфейса вкладки"""
         main_container = ttk.Frame(self.frame)
         main_container.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         
-        # Настройка весов для растягивания
         self.frame.columnconfigure(0, weight=1)
         self.frame.rowconfigure(0, weight=1)
         
         main_container.columnconfigure(0, weight=1)
-        # Более простая настройка весов строк
         for i in range(8):
             main_container.rowconfigure(i, weight=0)
-        main_container.rowconfigure(6, weight=1)  # Прогнозы
-        main_container.rowconfigure(7, weight=1)  # Рекомендации
+        main_container.rowconfigure(6, weight=1)
+        main_container.rowconfigure(7, weight=1)
         
         title_label = ttk.Label(main_container,
                                text="Прогнозирование жирнокислотного состава молока",
@@ -49,18 +72,15 @@ class DietPredictionView:
         self.create_file_section(main_container, row=1)
         self.create_diet_selection_section(main_container, row=2)
         
-        # Создаем редактор диет
         self.diet_editor = DietEditor(main_container, self)
         self.diet_editor.frame.grid(row=3, column=0, sticky=(tk.W, tk.E), pady=(10, 0))        
         self.create_editor_control_section(main_container, row=4)
         
-        # Кнопка расчета
         ttk.Button(main_container, 
                   text="Рассчитать прогноз",
                   command=self.calculate_prediction,
                   style='Accent.TButton').grid(row=5, column=0, pady=20)
         
-        # Области отображения результатов
         self.prediction_display = AcidPredictionDisplay(main_container, self)
         self.prediction_display.frame.grid(row=6, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(0, 10))
         
@@ -97,17 +117,14 @@ class DietPredictionView:
         file_frame.grid(row=row, column=0, sticky=(tk.W, tk.E), pady=(0, 10))
         file_frame.columnconfigure(1, weight=1)
         
-        # Кнопка для загрузки одиночного рациона
         ttk.Button(file_frame, 
                 text="Загрузить рацион (PDF/Excel/CSV)",
                 command=self.load_diet_file).grid(row=0, column=0, padx=(0, 10), sticky=tk.W)
         
-        # Кнопка для загрузки всех рационов из CSV
         ttk.Button(file_frame, 
                 text="Загрузить CSV с рационами",
                 command=self.load_all_diets).grid(row=0, column=1, padx=(0, 10), sticky=tk.W)
         
-        # Кнопка для создания нового рациона
         ttk.Button(file_frame,
                 text="Создать новый рацион",
                 command=self.create_new_diet).grid(row=0, column=2, padx=(0, 10), sticky=tk.W)
@@ -134,7 +151,7 @@ class DietPredictionView:
     def on_diet_selected(self, event):
         """Обработчик выбора рациона из списка"""
         selected_index = self.diet_combobox.current()
-        if selected_index >= 0 and selected_index < len(self.current_diets):
+        if 0 <= selected_index < len(self.current_diets):
             selected_diet = self.current_diets[selected_index]
             self.set_current_diet(selected_diet)
             self.update_diet_display()
@@ -145,9 +162,11 @@ class DietPredictionView:
         diet_names = [diet.name for diet in self.current_diets]
         self.diet_combobox['values'] = diet_names
         
-        if hasattr(self, 'current_diet') and self.current_diet in self.current_diets:
+        if self.current_diet and self.current_diet in self.current_diets:
             current_index = self.current_diets.index(self.current_diet)
             self.diet_combobox.current(current_index)
+        elif self.current_diets:
+            self.diet_combobox.current(0)
     
     def load_all_diets(self):
         """Загружает все рационы из CSV файла"""
@@ -166,8 +185,8 @@ class DietPredictionView:
             all_diets = parser.parse_all_diets(file_path)
             
             if all_diets:
-                self.current_diets.extend(all_diets)
-                if not hasattr(self, 'current_diet') and all_diets:
+                self.current_diets = all_diets  # Заменяем, а не добавляем
+                if all_diets:
                     self.set_current_diet(all_diets[0])
                 
                 self.update_diet_combobox()
@@ -227,6 +246,8 @@ class DietPredictionView:
     
     def create_new_diet(self):
         """Создание нового пустого рациона"""
+        from ..models.diet import DietComponent 
+        
         new_diet = Diet(
             diet_id=f"diet_{len(self.current_diets) + 1}",
             name=f"Новый рацион {len(self.current_diets) + 1}",
@@ -246,12 +267,12 @@ class DietPredictionView:
         
     def update_diet_display(self):
         """Обновление отображения рациона"""
-        if hasattr(self, 'current_diet') and self.current_diet:
+        if self.current_diet and hasattr(self, 'diet_editor'):
             self.diet_editor.load_diet(self.current_diet)
             
     def calculate_prediction(self):
         """Расчет прогноза на основе текущего рациона"""
-        if not hasattr(self, 'current_diet') or not self.current_diet:
+        if not self.current_diet:
             messagebox.showwarning("Внимание", "Сначала загрузите или создайте рацион")
             return
             
@@ -277,7 +298,7 @@ class DietPredictionView:
             
     def print_current_diet_info(self):
         """Выводит информацию о текущем рационе в терминал"""
-        if not hasattr(self, 'current_diet') or not self.current_diet:
+        if not self.current_diet:
             print("Текущий рацион не установлен")
             return
             
@@ -297,8 +318,9 @@ class DietPredictionView:
         
     def update_diet_component(self, component_name: str, new_value: float):
         """Обновление компонента рациона"""
-        if hasattr(self, 'current_diet') and self.current_diet:
-            # Обновляем существующий компонент или создаем новый
+        from ..models.diet import DietComponent  # Добавляем импорт
+        
+        if self.current_diet:
             if component_name in self.current_diet.components:
                 self.current_diet.components[component_name].amount = new_value
             else:

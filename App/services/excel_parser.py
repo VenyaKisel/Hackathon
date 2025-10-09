@@ -19,12 +19,10 @@ class ExcelParser:
                 csv_path = self._excel_to_csv(file_path)
                 return self._parse_single_diet_from_csv(csv_path)
             elif file_ext == '.pdf':
-                # Для PDF пытаемся несколько способов
                 result = self._parse_pdf_single(file_path)
                 if result:
                     return result
                 else:
-                    # Fallback: конвертируем в CSV
                     csv_path = self._pdf_to_csv(file_path)
                     if csv_path:
                         return self._parse_single_diet_from_csv(csv_path)
@@ -66,11 +64,7 @@ class ExcelParser:
                 reader = csv.DictReader(file)
                 rows = list(reader)
                 
-                if not rows:
-                    print("ℹ️ Файл пустой")
-                    return None
-                
-                # Берем первую строку
+
                 first_row = rows[0]
                 ration_id = first_row.get('ration_id', '1')
                 diet = self._create_diet_from_row(first_row, os.path.basename(file_path), ration_id)
@@ -115,12 +109,10 @@ class ExcelParser:
     def _parse_pdf_single(self, pdf_path: str) -> Optional[Diet]:
         """Парсит один рацион из PDF файла нового формата"""
         try:
-            # Пытаемся несколько способов парсинга
             result = self._parse_nds_pdf_format(pdf_path)
             if result:
                 return result
             
-            # Fallback на существующие методы
             return self._parse_pdf_tables_fallback(pdf_path)
             
         except Exception as e:
@@ -142,7 +134,6 @@ class ExcelParser:
                 if not full_text:
                     return None
                 
-                # Парсим ингредиенты из текста
                 components = self._extract_components_from_nds_text(full_text)
                 
                 if components:
@@ -162,10 +153,8 @@ class ExcelParser:
         """Извлекает компоненты из текста NDS формата"""
         components = {}
         
-        # Разделяем текст на строки
         lines = text.split('\n')
         
-        # Ищем начало таблицы ингредиентов
         start_index = -1
         for i, line in enumerate(lines):
             if 'Ингредиенты' in line:
@@ -176,24 +165,21 @@ class ExcelParser:
             print("❌ Не найдена таблица ингредиентов")
             return {}
         
-        # Парсим ингредиенты - ищем строки с данными после заголовка
         i = start_index + 1
         while i < len(lines):
             line = lines[i].strip()
             
-            # Пропускаем пустые строки и заголовки столбцов
             if not line or any(keyword in line for keyword in ['СВ %', 'ГП кг', 'СВ кг', '% ГП', '% СВ', '₽/Tonne']):
                 i += 1
                 continue
             
-            # Пытаемся извлечь данные ингредиента
             ingredient_data = self._parse_ingredient_line(lines, i)
             if ingredient_data:
                 name, amount = ingredient_data
                 if name and amount > 0:
                     components[name] = DietComponent(name, amount)
                     print(f"✅ Извлечен ингредиент: {name} - {amount} кг")
-                i += 7  # Пропускаем блок данных (название + 6 строк данных)
+                i += 7
             else:
                 i += 1
         
@@ -205,17 +191,13 @@ class ExcelParser:
             if start_idx + 6 >= len(lines):
                 return None
             
-            # Первая строка - название ингредиента
             name = lines[start_idx].strip()
             
-            # Вторая строка - СВ %, третья - ГП кг (нам нужна эта)
             amount_line = lines[start_idx + 2].strip()  # ГП кг
             
-            # Очищаем и конвертируем количество
             amount_str = amount_line.replace(',', '.').replace(' ', '')
             amount = float(amount_str)
             
-            # Проверяем валидность названия (должно содержать буквы или быть кодом)
             if not self._is_valid_ingredient_name(name):
                 return None
                 
@@ -236,7 +218,6 @@ class ExcelParser:
         if any(keyword in name for keyword in excluded_keywords):
             return False
         
-        # Должны быть либо буквы, либо код вида "XXXX.XX.XX.XX.XX"
         if re.match(r'^[а-яА-Яa-zA-Z]', name) or re.match(r'^\d+\.\d+\.\d+\.\d+\.\d+', name):
             return True
             
@@ -269,7 +250,6 @@ class ExcelParser:
             if len(row) >= 3 and row[0] and self._is_valid_ingredient_name(str(row[0])):
                 try:
                     name = str(row[0]).strip()
-                    # Пытаемся найти количество в различных столбцах
                     amount = self._find_amount_in_row(row)
                     if amount > 0:
                         components[name] = DietComponent(name, amount)

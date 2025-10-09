@@ -1,82 +1,90 @@
-# services/recommender.py (ОБНОВЛЕННАЯ ВЕРСИЯ)
+# services/recommender.py
 from typing import List, Dict
 from ..models.diet import Diet
 from ..models.fatty_acid import PredictionResult
 from .rec_manager import RecommendationManager
-from .predictor import AcidPredictor
-
 
 class DietRecommender:
-    """Обновленный класс с интеграцией рекомендательной системы"""
+    """Рекомендательная система для рациона коров"""
     
-    def __init__(self):
-        self.recommendation_manager = RecommendationManager()
-        self.predictor = AcidPredictor()
+    def __init__(self, acid_predictor=None): 
+        if acid_predictor:
+            self.acid_predictor = acid_predictor
+        else:
+            from .predictor import AcidPredictor
+            self.acid_predictor = AcidPredictor()
+            
+        self.recommendation_manager = RecommendationManager(self.acid_predictor)
+        print("✅ Рекомендательная система инициализирована")
     
-    def generate_recommendations(self, diet: Diet, 
-                               prediction: PredictionResult) -> List[str]:
-        """Генерирует текстовые рекомендации (обратная совместимость)"""
-        structured_recommendations = self.recommendation_manager.generate_recommendations(
-            diet, prediction
-        )
-        
-        return self._format_recommendations(structured_recommendations)
+    def generate_recommendations(self, diet: Diet, prediction: PredictionResult) -> List[str]:
+        """Генерирует текстовые рекомендации на основе предсказаний"""
+        try:
+            structured_recommendations = self.recommendation_manager.generate_recommendations(diet, prediction)
+            
+            return self._format_recommendations(structured_recommendations, prediction)
+            
+        except Exception as e:
+            print(f"❌ Ошибка генерации рекомендаций: {e}")
+            return ["⚠️ Временные технические работы. Рекомендации будут доступны позже."]
     
-    def _format_recommendations(self, recommendations: List) -> List[str]:
-        """Форматирует структурированные рекомендации в текст"""
+    def _format_recommendations(self, recommendations: List, prediction: PredictionResult) -> List[str]:
+        """Форматирует структурированные рекомендации в текстовый вид"""
         if not recommendations:
-            return ["✅ Все жирные кислоты в пределах целевых значений"]
+            return self._get_no_recommendations_message(prediction)
         
-        formatted = ["📊 РЕКОМЕНДАЦИИ ПО КОРРЕКЦИИ РАЦИОНА:"]
+        formatted = []
         
-        for i, rec in enumerate(recommendations, 1):
-            # Эмодзи для приоритета
-            priority_emoji = {
-                'critical': '🔴',
-                'warning': '🟡', 
-                'info': '🟢'
-            }.get(rec.priority.value, '⚪')
-            
-            formatted.append(f"\n{priority_emoji} Рекомендация {i}: {rec.title}")
-            formatted.append(f"   {rec.description}")
-            
-            for adj in rec.adjustments:
-                change = adj.recommended_amount - adj.current_amount
-                direction = "увеличить" if change > 0 else "уменьшить"
+        problematic_count = self._count_problematic_acids(prediction)
+        formatted.append(f"📊 АНАЛИЗ РАЦИОНА:")
+        formatted.append(f"Обнаружено проблем: {problematic_count}")
+        
+        problematic_acids = self._get_problematic_acids(prediction)
+        if problematic_acids:
+            formatted.append("\n🔍 ПРОБЛЕМНЫЕ КИСЛОТЫ:")
+            for acid_name, acid_pred in problematic_acids:
+                status = "ниже нормы" if acid_pred.predicted_value < acid_pred.target_min else "выше нормы"
                 formatted.append(
-                    f"   • {direction} {adj.component_name} с {adj.current_amount:.1f} "
-                    f"до {adj.recommended_amount:.1f} кг"
+                    f"• {acid_name}: {status} "
+                    f"({acid_pred.predicted_value:.1f}% при норме {acid_pred.target_min:.1f}-{acid_pred.target_max:.1f}%)"
                 )
-            
-            # Ожидаемое улучшение
-            for acid, impact in rec.expected_improvement.items():
-                if impact != 0:
-                    formatted.append(f"   → {acid}: {impact:+.2f}%")
         
-        formatted.append("\n💡 Примените рекомендации и пересчитайте прогноз")
+        formatted.append("\n💡 РЕКОМЕНДАЦИИ:")
+        for i, rec in enumerate(recommendations[:5], 1):  # Ограничиваем 5 рекомендациями
+            if rec.adjustments:
+                adjustment = rec.adjustments[0]
+                direction = "увеличить" if adjustment.change_direction == 'increase' else "уменьшить"
+                formatted.append(
+                    f"{i}. {direction} {adjustment.component_name} "
+                    f"с {adjustment.current_amount:.1f}кг до {adjustment.recommended_amount:.1f}кг"
+                )
+        
+        if len(recommendations) > 5:
+            formatted.append(f"\n... и еще {len(recommendations) - 5} рекомендаций")
+        
         return formatted
     
-    def generate_structured_recommendations(self, diet: Diet, 
-                                          prediction: PredictionResult):
-        """Возвращает структурированные рекомендации (для нового UI)"""
-        return self.recommendation_manager.generate_recommendations(diet, prediction)
+    def _get_no_recommendations_message(self, prediction: PredictionResult) -> List[str]:
+        """Возвращает сообщение когда рекомендаций нет"""
+        problematic_count = self._count_problematic_acids(prediction)
+        
+        if problematic_count == 0:
+            return ["✅ Все показатели в норме! Текущий рацион оптимален."]
+        else:
+            return [
+                "📊 АНАЛИЗ РАЦИОНА:",
+                f"Обнаружено проблем: {problematic_count}",
+                "\n💡 СОВЕТ:",
+            ]
     
-    def apply_and_evaluate_recommendation(self, diet: Diet, 
-                                        recommendation) -> Dict:
-        """Применяет рекомендацию и оценивает ее эффективность"""
-        modified_diet = self.recommendation_manager.apply_recommendation(
-            diet, recommendation
-        )
-        
-        original_prediction = self.predictor.predict(diet)
-        new_prediction = self.predictor.predict(modified_diet)
-        
-        impact = self.recommendation_manager.evaluate_recommendation_impact(
-            diet, modified_diet, original_prediction, new_prediction
-        )
-        
-        return {
-            'modified_diet': modified_diet,
-            'new_prediction': new_prediction,
-            'impact_analysis': impact
-        }
+    def _count_problematic_acids(self, prediction: PredictionResult) -> int:
+        """Считает количество кислот вне целевого диапазона"""
+        return sum(1 for acid_pred in prediction.acids.values() if not acid_pred.is_within_target)
+    
+    def _get_problematic_acids(self, prediction: PredictionResult) -> List:
+        """Возвращает список проблемных кислот"""
+        return [
+            (acid_name, acid_pred) 
+            for acid_name, acid_pred in prediction.acids.items() 
+            if not acid_pred.is_within_target
+        ]

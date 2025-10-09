@@ -20,7 +20,6 @@ class DietEditor:
         
         self.create_scrollable_components()
         
-        # Статус
         self.status_label = ttk.Label(self.frame, text="Рацион не загружен", foreground='gray')
         self.status_label.grid(row=2, column=0, columnspan=3, sticky=tk.W, pady=(10, 0))
     

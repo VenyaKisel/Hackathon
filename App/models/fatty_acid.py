@@ -1,9 +1,10 @@
-from dataclasses import dataclass
+# models/fatty_acid.py
 from typing import Dict
+from dataclasses import dataclass
 
 @dataclass
 class AcidPrediction:
-    """Прогноз для одной жирной кислоты"""
+    """Предсказание для одной жирной кислоты"""
     name: str
     predicted_value: float
     target_min: float
@@ -12,23 +13,10 @@ class AcidPrediction:
     
     @property
     def is_within_target(self) -> bool:
+        """Вычисляемое свойство - находится ли значение в целевом диапазоне"""
         return self.target_min <= self.predicted_value <= self.target_max
-    
-    @property 
-    def status(self) -> str:
-        if self.is_within_target:
-            return "в норме"
-        elif self.predicted_value < self.target_min:
-            return "ниже нормы"
-        else:
-            return "выше нормы"
 
 @dataclass
 class PredictionResult:
-    """Результат прогнозирования всех кислот"""
+    """Результат предсказания для всех кислот"""
     acids: Dict[str, AcidPrediction]
-    
-    def get_acids_outside_target(self) -> Dict[str, AcidPrediction]:
-        """Кислоты вне целевого диапазона"""
-        return {name: acid for name, acid in self.acids.items() 
-                if not acid.is_within_target}
