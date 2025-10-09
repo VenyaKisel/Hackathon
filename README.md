@@ -17,16 +17,6 @@
 - **Data**: Pandas, NumPy, Pickle
 - **Formats**: CSV, Excel, PDF
 
-## 📦 Установка
-
-### Требования
-- Python 3.8+
-- pip
-
-### Установка зависимостей
-```bash
-pip install -r requirements.txt
-```
 ### Структура
 ```bash
 Hackathon/
