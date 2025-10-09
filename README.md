@@ -26,3 +26,29 @@
 ### Установка зависимостей
 ```bash
 pip install -r requirements.txt
+
+
+Hackathon/
+│
+├── App/  
+│   └── … (GUI, модули интерфейса, представления)  
+│
+├── __pycache__/  
+│
+├── main.py  
+│   └── Точка входа в приложение / оркестрация  
+│
+├── script_new_data.py  
+│   └── Генерация / обновление исходных данных  
+│
+├── script_compress_data.py  
+│   └── Сжатие / агрегация / уменьшение данных  
+│
+├── rations.csv  
+├── rations_with_acids.csv  
+├── compressed_rations.csv  
+│   └── Датасеты / промежуточные / итоговые файлы  
+│
+├── README.md  
+│
+└── .DS_Store  
